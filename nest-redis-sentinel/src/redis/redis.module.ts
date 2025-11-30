@@ -51,6 +51,11 @@ export class RedisModule {
             const enableSentinelRetryStrategy =
               config.get<string>("REDIS_SENTINEL_RETRY_STRATEGY", "true") ===
               "true";
+            const enableSentinelReconnectStrategy =
+              config.get<string>(
+                "REDIS_SENTINEL_RECONNECT_STRATEGY",
+                "true"
+              ) === "true";
             const enableAutoPipelining =
               config.get<string>("REDIS_ENABLE_AUTO_PIPELINING", "true") ===
               "true";
@@ -157,6 +162,14 @@ export class RedisModule {
               options.sentinelRetryStrategy = (retryAttempts) => {
                 RedisModule.logger.warn(
                   `[redis] sentinelRetryStrategy attempt #${retryAttempts}`
+                );
+                return Math.min(retryAttempts * 100, 5000);
+              };
+            }
+            if (enableSentinelReconnectStrategy) {
+              options.sentinelReconnectStrategy = (retryAttempts) => {
+                RedisModule.logger.warn(
+                  `[redis] sentinelReconnectStrategy attempt #${retryAttempts}`
                 );
                 return Math.min(retryAttempts * 100, 5000);
               };

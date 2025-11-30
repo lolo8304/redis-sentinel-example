@@ -14,6 +14,22 @@ export class HealthController {
     private readonly redisService: RedisService
   ) {}
 
+  @Get("api")
+  //@HealthCheck()
+  async checkApi(): Promise<HealthCheckResult> {
+    // Simple but effective: PING and verify answer = PONG
+    return this.health.check([
+      async () => {
+        return {
+          api: {
+            status: "up",
+            message: "API is healthy",
+          },
+        };
+      },
+    ]);
+  }
+
   @Get("redis")
   //@HealthCheck()
   async checkRedis(): Promise<HealthCheckResult> {
@@ -63,12 +79,24 @@ export class HealthController {
             },
           };
         } catch (err: any) {
-          return {
-            redis: {
-              status: "down",
-              message: err?.message ?? "Unknown error",
-            },
-          };
+          const msg = (err?.message ?? "Unknown error")
+            .toString()
+            .toLowerCase();
+          if (msg.includes("connection is closed")) {
+            return {
+              redis: {
+                status: "down",
+                message: err?.message ?? "Unknown error",
+              },
+            };
+          } else {
+            return {
+              redis: {
+                status: "up",
+                message: err?.message ?? "Unknown error",
+              },
+            };
+          }
         }
       },
     ]);

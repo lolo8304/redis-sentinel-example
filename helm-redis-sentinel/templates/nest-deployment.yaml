@@ -48,17 +48,18 @@ spec:
           {{- if .Values.nest.probes.readiness.enabled }}
           readinessProbe:
             httpGet:
-              path: /health/redis
+              path: {{ .Values.nest.probes.path }}
               port: http
             initialDelaySeconds: {{ .Values.nest.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.nest.probes.readiness.periodSeconds }}
             timeoutSeconds: {{ .Values.nest.probes.readiness.timeoutSeconds }}
             failureThreshold: {{ .Values.nest.probes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.nest.probes.readiness.successThreshold }}
           {{- end }}
           {{- if .Values.nest.probes.liveness.enabled }}
           livenessProbe:
             httpGet:
-              path: /health/redis
+              path: {{ .Values.nest.probes.path }}
               port: http
             initialDelaySeconds: {{ .Values.nest.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.nest.probes.liveness.periodSeconds }}
@@ -68,7 +69,7 @@ spec:
           {{- if .Values.nest.probes.startup.enabled }}
           startupProbe:
             httpGet:
-              path: /health/redis
+              path: {{ .Values.nest.probes.path }}
               port: http
             failureThreshold: {{ .Values.nest.probes.startup.failureThreshold }}
             periodSeconds: {{ .Values.nest.probes.startup.periodSeconds }}

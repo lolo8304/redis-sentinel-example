@@ -35,7 +35,7 @@ spec:
           command: [
             'sh', 
             '-c', 
-            'cat /etc/redisS/sentinel.conf && cp /etc/redisS/sentinel.conf /tmp-config/sentinel.conf && chmod 644 /tmp-config/sentinel.conf && cat /etc/redis/redis.conf && cp /etc/redis/redis.conf /tmp-config/redis.conf && chmod 644 /tmp-config/redis.conf'
+            'cat /etc/redisS/sentinel.conf && cp -n /etc/redisS/sentinel.conf /tmp-config/sentinel.conf && chmod 644 /tmp-config/sentinel.conf && cat /etc/redis/redis.conf && cp -n /etc/redis/redis.conf /tmp-config/redis.conf && chmod 644 /tmp-config/redis.conf'
           ]
           volumeMounts:
             - name: config
