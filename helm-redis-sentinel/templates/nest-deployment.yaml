@@ -1,0 +1,88 @@
+{{- if .Values.nest.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "redis-sentinel.fullname" . }}-api
+  labels:
+    app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: {{ include "redis-sentinel.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+spec:
+  replicas: {{ .Values.nest.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}-api
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/part-of: {{ include "redis-sentinel.name" . }}
+        helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/nest-configmap.yaml") . | sha256sum }}
+        timestamp: {{ now | quote }}
+    spec:
+      containers:
+        - name: nest-api
+          image: "{{- if .Values.nest.image.registry }}{{ .Values.nest.image.registry }}/{{ end }}{{ .Values.nest.image.repository }}:{{ .Values.nest.image.tag }}"
+          imagePullPolicy: {{ .Values.nest.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.nest.port }}
+              name: http
+          env:
+            - name: PORT
+              value: "{{ .Values.nest.port }}"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-redis" (include "redis-sentinel.fullname" .)) .Values.redis.existingSecret }}
+                  key: redis-password
+          envFrom:
+            - configMapRef:
+                name: {{ include "redis-sentinel.fullname" . }}-api
+          {{- if .Values.nest.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /health/redis
+              port: http
+            initialDelaySeconds: {{ .Values.nest.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.nest.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.nest.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.nest.probes.readiness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.nest.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /health/redis
+              port: http
+            initialDelaySeconds: {{ .Values.nest.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.nest.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.nest.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.nest.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.nest.probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: /health/redis
+              port: http
+            failureThreshold: {{ .Values.nest.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.nest.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.nest.probes.startup.timeoutSeconds }}
+          {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    echo "[preStop] Gracefully shutting down Nest API"
+                    sleep 5
+          resources:
+            {{- toYaml .Values.nest.resources | nindent 12 }}
+{{- end }}

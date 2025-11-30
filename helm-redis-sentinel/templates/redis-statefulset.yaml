@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "redis-sentinel.fullname" . }}-redis
+  labels:
+    {{- include "redis-sentinel.labels" . | nindent 4 }}
+  annotations:
+    checksum/config: {{ include (print $.Template.BasePath "/redis-configmap.yaml") . | sha256sum }}{{- if .Values.sentinel.enabled }}-{{ include (print $.Template.BasePath "/sentinel-configmap.yaml") . | sha256sum }}{{- end }}
+spec:
+  serviceName: {{ .Values.service.headless.name }}
+  replicas: {{ .Values.redis.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}
+  template:
+    metadata:
+      labels:
+        {{- include "redis-sentinel.labels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.redis.terminationGracePeriodSeconds }}
+      {{- if .Values.securityContext.enabled }}
+      securityContext:
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+      {{- end }}
+      # add an init container to copy /etc/sentinel/sentinel.conf to /tmp-config/sentinel.conf
+      # so that the sentinel process can write to it and start the sentinel properly with the config
+      {{- if .Values.sentinel.enabled }}
+      initContainers:
+        - name: init-sentinel-config
+          # Use a minimal image that definitely has shell tools
+          image: "busybox:stable" 
+          imagePullPolicy: "IfNotPresent"
+          command: [
+            'sh', 
+            '-c', 
+            'cat /etc/redisS/sentinel.conf && cp /etc/redisS/sentinel.conf /tmp-config/sentinel.conf && chmod 644 /tmp-config/sentinel.conf && cat /etc/redis/redis.conf && cp /etc/redis/redis.conf /tmp-config/redis.conf && chmod 644 /tmp-config/redis.conf'
+          ]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis
+            - name: sentinel-config
+              mountPath: /etc/redisS
+            - name: tmp-config
+              mountPath: /tmp-config
+      {{- end }}
+      containers:
+        - name: redis
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: redis
+              containerPort: {{ .Values.redis.port }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              ordinal="${HOSTNAME##*-}"
+              master_host="{{ include "redis-sentinel.fullname" . }}-redis-0.{{ .Values.service.headless.name }}.{{ .Release.Namespace }}.svc.cluster.local"
+              args="--replica-announce-ip ${POD_IP}"
+              if [ "$ordinal" != "0" ]; then
+                args="$args --replicaof ${master_host} {{ .Values.redis.port }}"
+              fi
+              exec redis-server /tmp-config/redis.conf $args
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-redis" (include "redis-sentinel.fullname" .)) .Values.redis.existingSecret }}
+                  key: redis-password
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          {{- if .Values.redis.probes.readiness.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  redis-cli -a "$REDIS_PASSWORD" PING | grep -q PONG
+            initialDelaySeconds: {{ .Values.redis.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.redis.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.redis.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.redis.probes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.redis.probes.readiness.successThreshold }}
+          {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    echo "[preStop] Pod is terminating, sleeping {{ .Values.redis.preStopWaitSeconds }}s to let traffic drain and Sentinel failover if needed"
+                    sleep {{ .Values.redis.preStopWaitSeconds }}
+          {{- if .Values.redis.probes.liveness.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: {{ .Values.redis.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.redis.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.redis.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.redis.probes.liveness.failureThreshold }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis
+            - name: data
+              mountPath: /data
+            - name: tmp-config
+              mountPath: /tmp-config
+        {{- if .Values.sentinel.enabled }}
+        - name: sentinel
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c", "cat /tmp-config/sentinel.conf && redis-sentinel /tmp-config/sentinel.conf"]
+          ports:
+            - name: sentinel
+              containerPort: {{ .Values.sentinel.port }}
+          {{- if .Values.sentinel.probes.readiness.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  redis-cli -p 26379 SENTINEL masters | grep -q name
+            initialDelaySeconds: {{ .Values.sentinel.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.sentinel.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.sentinel.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.sentinel.probes.readiness.failureThreshold }}
+          {{- end }}
+
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    echo "[preStop] Sentinel terminating, sleeping {{ .Values.sentinel.preStopWaitSeconds }}s so remaining Sentinels keep quorum"
+                    sleep {{ .Values.sentinel.preStopWaitSeconds }}
+          volumeMounts:
+            - name: sentinel-config
+              mountPath: /etc/redisS
+            - name: data
+              mountPath: /data
+            - name: tmp-config
+              mountPath: /tmp-config
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "redis-sentinel.fullname" . }}-redis-config
+            items:
+              - key: redis.conf
+                path: redis.conf
+        {{- if .Values.sentinel.enabled }}
+        - name: sentinel-config
+          configMap:
+            name: {{ include "redis-sentinel.fullname" . }}-sentinel-config
+            items:
+              - key: sentinel.conf
+                path: sentinel.conf
+        {{- end }}
+        - name: data
+          emptyDir: {}
+        - name: tmp-config
+          emptyDir: {}

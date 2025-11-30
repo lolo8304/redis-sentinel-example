@@ -1,0 +1,138 @@
+image:
+  registry: docker.io
+  repository: redis
+  tag: "7.2"
+  pullPolicy: Always
+
+redis:
+  replicaCount: 5 # 3 pods, 1 master + 4 replicas
+  syncCount: 3 # number of replicas that must be in sync for writes to be accepted by the master
+  port: 6379
+  preStopWaitSeconds: 0
+  terminationGracePeriodSeconds: 10
+  password: "toto" # used only when generating sealed secret value; do not store real passwords here in production
+  existingSecret: "" # name of secret with key `redis-password`;
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  probes:
+    readiness:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 3
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    liveness:
+      enabled: true
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 5
+
+  storage:
+    enabled: false
+    emptyDir:
+      sizeLimit: ""
+
+sentinel:
+  enabled: true
+  port: 26379
+  quorum: 2
+  preStopWaitSeconds: 0
+  probes:
+    readiness:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+
+securityContext:
+  enabled: true
+  runAsUser: 1001
+  fsGroup: 1001
+  runAsNonRoot: true
+
+serviceAccount:
+  create: true
+
+service:
+  headless:
+    name: redis
+  sentinel:
+    enabled: true
+    type: LoadBalancer
+    port: 26379
+    annotations: {}
+
+networkPolicy:
+  enabled: false
+  allowFromNamespaces: [] # e.g. ["backend"]
+
+podDisruptionBudget:
+  enabled: true
+  minAvailableRedis: 2
+
+nest:
+  enabled: true
+  replicaCount: 1
+  image:
+    registry: ""
+    repository: nest-redis-sentinel
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 3000
+  env:
+    REDIS_SENTINEL_HOSTS: my-redis-redis-sentinel-redis-0.redis.default.svc.cluster.local:26379,my-redis-redis-sentinel-redis-1.redis.default.svc.cluster.local:26379,my-redis-redis-sentinel-redis-2.redis.default.svc.cluster.local:26379,my-redis-redis-sentinel-redis-3.redis.default.svc.cluster.local:26379,my-redis-redis-sentinel-redis-4.redis.default.svc.cluster.local:26379
+    #REDIS_SENTINEL_HOSTS: my-redis-redis-sentinel-redis-0.redis.default.svc.cluster.local:26379,my-redis-redis-sentinel-redis-1.redis.default.svc.cluster.local:26379,my-redis-redis-sentinel-redis-2.redis.default.svc.cluster.local:26379
+    #REDIS_SENTINEL_HOSTS: "sentinel.default.svc.cluster.local:26379"
+    REDIS_SENTINEL_MASTER_SET: "mymaster"
+    REDIS_DB: "0"
+    REDIS_ENABLE_TLS: "false"
+    REDIS_LAZY_CONNECT: "true"
+    REDIS_ENABLE_READY_CHECK: "true"
+    REDIS_ENABLE_AUTO_PIPELINING: "false"
+    REDIS_FAILOVER_DETECTOR: "false"
+    REDIS_AUTO_RESUBSCRIBE: "false"
+    REDIS_SHOW_FRIENDLY_ERROR_STACK: "true"
+    REDIS_ENABLE_OFFLINE_QUEUE: "true"
+    REDIS_CONNECT_TIMEOUT_MS: "10000"
+    REDIS_MAX_RETRIES_PER_REQUEST: "200" # set to "null" or -1 for infinite
+    REDIS_KEEP_ALIVE_MS: "10000"
+    REDIS_RETRY_STRATEGY: "true"
+    REDIS_SENTINEL_RETRY_STRATEGY: "true"
+    REDIS_CACHE_TTL: "300" # seconds
+    #DEBUG: "ioredis:*"
+  probes:
+    readiness:
+      enabled: false
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+    liveness:
+      enabled: false
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 3
+      failureThreshold: 3
+    startup:
+      enabled: false
+      failureThreshold: 30
+      periodSeconds: 3
+      timeoutSeconds: 3
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+  service:
+    type: LoadBalancer
+    port: 8080

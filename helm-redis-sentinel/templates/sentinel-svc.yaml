@@ -1,0 +1,23 @@
+{{- if .Values.sentinel.enabled }}
+{{- if .Values.service.sentinel.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel
+  labels:
+    {{- include "redis-sentinel.labels" . | nindent 4 }}
+  {{- with .Values.service.sentinel.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.sentinel.type }}
+  sessionAffinity: ClientIP
+  ports:
+    - name: sentinel
+      port: {{ .Values.service.sentinel.port }}
+      targetPort: sentinel
+  selector:
+    app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}
+{{- end }}
+{{- end }}

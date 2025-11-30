@@ -1,0 +1,16 @@
+{{- if .Values.nest.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "redis-sentinel.fullname" . }}-api
+  labels:
+    app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: {{ include "redis-sentinel.name" . }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+data:
+  {{- range $name, $value := .Values.nest.env }}
+  {{ $name }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}

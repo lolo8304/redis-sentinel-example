@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "redis-sentinel.fullname" . }}-redis-config
+  labels:
+    {{- include "redis-sentinel.labels" . | nindent 4 }}
+data:
+  redis.conf: |
+    bind 0.0.0.0
+    port {{ .Values.redis.port }}
+    protected-mode yes
+    {{- if .Values.redis.password }}
+    requirepass {{ .Values.redis.password }}
+    masterauth {{ .Values.redis.password }}
+    {{- end }}
+
+    appendonly yes
+    appendfsync everysec
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    maxmemory 4gb
+    maxmemory-policy allkeys-lru
+
+    repl-diskless-sync yes
+    repl-diskless-sync-delay 5
+    repl-backlog-size 256mb
+    repl-timeout 60
+
+    min-replicas-to-write 0
+    min-replicas-max-lag 10
+    tcp-keepalive 30

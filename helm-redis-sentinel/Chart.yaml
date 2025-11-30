@@ -1,0 +1,18 @@
+apiVersion: v2
+name: redis-sentinel
+description: Redis 3-node HA with Sentinel (1 master, 2 replicas) using ephemeral storage
+type: application
+version: 0.1.0
+appVersion: "7.2"
+keywords:
+  - redis
+  - sentinel
+  - cache
+  - ha
+home: https://redis.io
+sources:
+  - https://github.com/redis/redis
+  - https://github.com/bitnami/charts/tree/master/bitnami/redis
+maintainers:
+  - name: your-name
+    email: you@example.com

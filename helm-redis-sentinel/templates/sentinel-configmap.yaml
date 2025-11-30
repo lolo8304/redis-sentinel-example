@@ -1,0 +1,22 @@
+{{- if .Values.sentinel.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "redis-sentinel.fullname" . }}-sentinel-config
+  labels:
+    {{- include "redis-sentinel.labels" . | nindent 4 }}
+data:
+  sentinel.conf: |
+    loglevel debug
+    port {{ .Values.sentinel.port }}
+    bind 0.0.0.0
+    dir /tmp
+    sentinel resolve-hostnames yes
+    sentinel monitor mymaster {{ include "redis-sentinel.fullname" . }}-redis-0.{{ .Values.service.headless.name }}.{{ .Release.Namespace }}.svc.cluster.local {{ .Values.redis.port }} {{ .Values.sentinel.quorum }}
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel failover-timeout mymaster 60000
+    sentinel parallel-syncs mymaster {{ .Values.redis.syncCount }}
+    {{- if .Values.redis.password }}
+    sentinel auth-pass mymaster {{ .Values.redis.password }}
+    {{- end }}
+{{- end }}

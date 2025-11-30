@@ -1,0 +1,25 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "redis-sentinel.fullname" . }}-redis
+  labels:
+    {{- include "redis-sentinel.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "redis-sentinel.name" . }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+        {{- range .Values.networkPolicy.allowFromNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              name: {{ . }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.redis.port }}
+        - port: {{ .Values.sentinel.port }}
+{{- end }}

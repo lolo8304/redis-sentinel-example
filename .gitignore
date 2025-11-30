@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# Env files and local config
+.env
+**/.env
+.env.*
+.bash_history
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors/OS
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing/coverage
+coverage/
+**/coverage/
